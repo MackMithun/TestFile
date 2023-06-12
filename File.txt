@@ -1,0 +1,48 @@
+[HttpGet]
+        public IActionResult ReadFile()
+        {
+            return View();
+        }
+        [HttpPost]
+         public IActionResult ReadFile(IFormFile file)
+        {
+            string path = "C:/Users/Mithun/source/repos/FirstMVC/FirstMVC/wwwroot/Content/file/";
+            if (!Directory.Exists(path))
+            {
+                Directory.CreateDirectory(path);
+            }
+
+            string fileName = Path.GetFileName(file.FileName);
+            using (FileStream stream = new FileStream(Path.Combine(path, fileName), FileMode.Create))
+            {
+                file.CopyTo(stream);
+            }
+
+            Parser parser = new Parser(@""+path+ file.FileName);
+
+            using (TextReader reader = parser.GetText())
+            {
+                ViewBag.Data = reader.ReadToEnd();
+
+            }
+            return View();
+        }
+
+
+
+
+
+
+====================================================================================================
+<form asp-action="ReadFile" asp-controller="Home" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" />
+        <input type="submit" value="Upload" />
+        @if (ViewBag.Data != null)
+        {
+            <hr />
+            <div>
+                <p>@ViewBag.Data</p>
+            </div>
+        }
+        
+    </form>
