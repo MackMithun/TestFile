@@ -1,0 +1,445 @@
+Index.cshtml
+------------
+<div class="text-center">
+                                                                                <button type="button" onclick="convertDocToText()" class="btn btn-primary waves-effect waves-light">
+                                                                                    Process file
+                                                                                </button>
+
+                                                                            </div>
+
+
+
+
+
+
+DataConverter.js
+----------------
+function previewDoc() {
+    $("#UploadedLoader").css("display", "block");
+    var valuedoc = $('#DocumentInput').val();
+    valuedoc.substring(valuedoc.lastIndexOf("\\") + 1, valuedoc.length);
+    var files = $('#DocumentInput').prop("files");
+    formData = new FormData();
+    formData.append("fileName", files[0]);
+    $.ajax({
+        url: "/Home/PreviewDoc/",
+        type: "POST",
+        data: formData,
+        cache: false,
+        contentType: false,
+        processData: false,
+        success: function (responseData) {
+            $("#UploadedLoader").css("display", "none");
+            var doc = document.getElementById("DocumentInput").files[0];
+            if (doc != null) {
+                pdfFilePath = responseData;
+                var docxOptions = Object.assign(docx.defaultOptions, {
+                    useMathMLPolyfill: true
+                });
+                var container = document.querySelector("#DocPreview");
+                docx.renderAsync(doc, container, null, docxOptions);
+            }
+        },
+        failure: function (responseData) {
+            console.log(responseData);
+            $("#UploadedLoader").css("display", "none");
+        },
+        error: function (responseData) {
+            console.log(responseData);
+            $("#UploadedLoader").css("display", "none");
+        }
+    })
+}
+
+
+function convertDocToText() {
+    var modal = document.getElementById("myModal");
+    modal.style.display = "block";
+    fnOutputdataPreviewDataBind(pdfFilePath);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+HomeController.cs
+-----------------
+ [HttpPost]
+        public async Task<IActionResult> PreviewDoc(IFormFile fileName)
+        {
+            string path = Directory.GetCurrentDirectory();
+            string newpath = "/DocFile/";
+            var file = Request.Form.Files[0];
+            string completepath = path + "\\wwwroot\\DocFile\\";
+            if (!Directory.Exists(completepath))
+            {
+                Directory.CreateDirectory(completepath);
+            }
+            string fileNamenew = "";
+            if (fileName.FileName.ToLower().Contains(".docx"))
+            {
+                fileNamenew = DateTime.Now.ToString("yyyyMMddhhmmss") + ".docx";
+            }
+            if (!System.IO.File.Exists(Path.Combine(completepath, fileNamenew)))
+            {
+                using (FileStream stream = new FileStream(Path.Combine(completepath, fileNamenew), FileMode.Create))
+                {
+                    fileName.CopyTo(stream);
+                }
+            }
+            string filePathNew = Path.Combine(newpath, fileNamenew);
+            string Connection = "DefaultEndpointsProtocol=https;AccountName=openaiteststorage1;AccountKey=M7oQmBw1aW+NjjefofkDGJP9fNffHKPbAPANPZunObzKW4zZdvL6dZAAhyzruWk1Fm/ncIi8Dj2Y+AStAt1LQA==;EndpointSuffix=core.windows.net";
+            string containerName = "test-pdf";
+            Stream myBlob = new MemoryStream();
+            myBlob = file.OpenReadStream();
+            var blobClient = new BlobContainerClient(Connection, containerName);
+            var blob = blobClient.GetBlobClient(fileNamenew);
+            await blob.UploadAsync(myBlob, overwrite: true);
+            return Json(filePathNew);
+        }
+
+
+========================
+        public async Task<string> ReadFileText(DataModelBot objModel)
+        {
+
+            string fileName = Path.GetFileName(objModel.TextFilePath);
+            string document = string.Empty;
+            string textFilePath = objModel.TextFilePath;
+
+            if (objModel.DataSource == "manual")
+            {
+                document = objModel.ExtractData;
+            }
+            else
+            {
+                if (Path.GetExtension(objModel.TextFilePath) == ".pdf")
+                {
+                    //document = await PdfProcessing($"https://cropenaipoc.blob.core.windows.net/craipoccntnr/{fileName}");
+                    document = await PdfProcessing($"https://openaiteststorage1.blob.core.windows.net/test-pdf/{fileName}");
+                }
+                else if (Path.GetExtension(objModel.TextFilePath) == ".docx")
+                {
+                    document = await docxProcessing($"https://openaiteststorage1.blob.core.windows.net/test-pdf/{fileName}");
+                }
+                else
+                {
+                    document = System.IO.File.ReadAllText(textFilePath);
+                }
+            }
+            return document;
+        }
+====================================
+public async Task<string> docxProcessing(string path)
+        {
+            string pageText = "";
+            try
+            {
+                using (var client = new WebClient())
+                {
+                    byte[] data = client.DownloadData(path);
+
+                    using (var document = WordprocessingDocument.Open(new MemoryStream(data), false))
+                    {
+                        var mainPart = document.MainDocumentPart;
+
+                        pageText = mainPart.Document.Body.InnerText;
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                pageText = ex.Message;
+            }
+            return pageText;
+        }
+
+
+
+
+
+
+
+HealthCare.js
+-------------------
+
+function GetData() {
+    $('#saveCheckBox').prop('checked', false);
+    $('#txtdate').val('');
+    $('#txtMedicalHistory').val('');
+    $('#txtExamination').val('');
+    $('#txtTestsdone').val('');
+    $('#txtMedicinesPrescribed').val('');
+    $.ajax({
+        url: "/HealthCare/GetData/",
+        type: "GET",
+        success: function (responseData) {
+            console.log(responseData);
+            var obj = jQuery.parseJSON(responseData);
+            $('#OpdformModal').modal('show');
+            $.each(obj, function (key, val) {
+                if (obj[key].entity == "Date") {
+                    $('#txtdate').val(obj[key].entityDescription);
+                }
+                else if (obj[key].entity == "Medical History") {
+                    $('#txtMedicalHistory').val(obj[key].entityDescription);
+                }
+                else if (obj[key].entity == "Body Examination") {
+                    $('#txtExamination').val(obj[key].entityDescription);
+                }
+                else if (obj[key].entity == "Tests done") {
+                    $('#txtTestsdone').val(obj[key].entityDescription);
+                }
+                else if (obj[key].entity == "Medicines Prescribed") {
+                    $('#txtMedicinesPrescribed').val(obj[key].entityDescription);
+                }
+            });
+        },
+        failure: function (responseData) {
+            console.log(responseData);
+            $("#UploadedLoader").css("display", "none");
+        },
+        error: function (responseData) {
+            console.log(responseData);
+            $("#UploadedLoader").css("display", "none");
+        }
+    })
+}
+
+
+
+
+
+function convertDocToText() {
+    var modal = document.getElementById("myModal");
+    modal.style.display = "block";
+    fnOutputdataPreviewDataBind(pdfFilePath);
+}
+
+
+
+
+
+function previewDoc() {
+    $("#UploadedLoader").css("display", "block");
+    var valuedoc = $('#DocumentInput').val();
+    valuedoc.substring(valuedoc.lastIndexOf("\\") + 1, valuedoc.length);
+    var files = $('#DocumentInput').prop("files");
+    formData = new FormData();
+    formData.append("fileName", files[0]);
+    $.ajax({
+        url: "/HealthCare/PreviewDoc/",
+        type: "POST",
+        data: formData,
+        cache: false,
+        contentType: false,
+        processData: false,
+        success: function (responseData) {
+            $("#UploadedLoader").css("display", "none");
+            var doc = document.getElementById("DocumentInput").files[0];
+            if (doc != null) {
+                pdfFilePath = responseData;
+                var docxOptions = Object.assign(docx.defaultOptions, {
+                    useMathMLPolyfill: true
+                });
+                var container = document.querySelector("#DocPreview");
+                docx.renderAsync(doc, container, null, docxOptions);
+            }
+        },
+        failure: function (responseData) {
+            console.log(responseData);
+            $("#UploadedLoader").css("display", "none");
+        },
+        error: function (responseData) {
+            console.log(responseData);
+            $("#UploadedLoader").css("display", "none");
+        }
+    })
+}
+
+
+
+
+
+HealthCareConstroller.cs
+--------------------------
+ [HttpPost]
+        public async Task<IActionResult> PreviewDoc(IFormFile fileName)
+        {
+            string path = Directory.GetCurrentDirectory();
+            string newpath = "/DocFile/";
+            var file = Request.Form.Files[0];
+            string completepath = path + "\\wwwroot\\DocFile\\";
+            if (!Directory.Exists(completepath))
+            {
+                Directory.CreateDirectory(completepath);
+            }
+            string fileNamenew = "";
+            if (fileName.FileName.ToLower().Contains(".docx"))
+            {
+                fileNamenew = DateTime.Now.ToString("yyyyMMddhhmmss") + ".docx";
+            }
+            if (!System.IO.File.Exists(Path.Combine(completepath, fileNamenew)))
+            {
+                using (FileStream stream = new FileStream(Path.Combine(completepath, fileNamenew), FileMode.Create))
+                {
+                    fileName.CopyTo(stream);
+                }
+            }
+            string filePathNew = Path.Combine(newpath, fileNamenew);
+            string Connection = "DefaultEndpointsProtocol=https;AccountName=openaiteststorage1;AccountKey=M7oQmBw1aW+NjjefofkDGJP9fNffHKPbAPANPZunObzKW4zZdvL6dZAAhyzruWk1Fm/ncIi8Dj2Y+AStAt1LQA==;EndpointSuffix=core.windows.net";
+            string containerName = "test-pdf";
+            Stream myBlob = new MemoryStream();
+            myBlob = file.OpenReadStream();
+            var blobClient = new BlobContainerClient(Connection, containerName);
+            var blob = blobClient.GetBlobClient(fileNamenew);
+            await blob.UploadAsync(myBlob, overwrite: true);
+            return Json(filePathNew);
+        }
+
+
+
+
+        public async Task<string> ReadFileText(DataModelBot objModel)
+        {
+
+            string fileName = Path.GetFileName(objModel.TextFilePath);
+            string document = string.Empty;
+            string textFilePath = objModel.TextFilePath;
+
+            if (objModel.DataSource == "manual")
+            {
+                document = objModel.ExtractData;
+            }
+            else
+            {
+                if (Path.GetExtension(objModel.TextFilePath) == ".pdf")
+                {
+                    //document = await PdfProcessing($"https://cropenaipoc.blob.core.windows.net/craipoccntnr/{fileName}");
+                    document = await PdfProcessing($"https://openaiteststorage1.blob.core.windows.net/test-pdf/{fileName}");
+                }
+                else if (Path.GetExtension(objModel.TextFilePath) == ".docx")
+                {
+                    document = await docxProcessing($"https://openaiteststorage1.blob.core.windows.net/test-pdf/{fileName}");
+                }
+                else
+                {
+                    document = System.IO.File.ReadAllText(textFilePath);
+                }
+            }
+            return document;
+        }
+
+
+
+
+
+        public async Task<string> docxProcessing(string path)
+        {
+            string pageText = "";
+            try
+            {
+                using (var client = new WebClient())
+                {
+                    byte[] data = client.DownloadData(path);
+
+                    using (var document = WordprocessingDocument.Open(new MemoryStream(data), false))
+                    {
+                        var mainPart = document.MainDocumentPart;
+
+                        pageText = mainPart.Document.Body.InnerText;
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                pageText = ex.Message;
+            }
+            return pageText;
+        }
+
+
+
+
+        public static void SaveEntity(DataModelBot obj)
+        {
+            List<EntityExtractrion> entityext = new List<EntityExtractrion>();
+            EntityModel model = new EntityModel();
+            string[] lines = obj.CompletionResult.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            // Extracting entities from the text OPD file
+            string date = "";
+            string medical_history = "";
+            string body_examination = "";
+            string tests_done = "";
+            string medicines_prescribed = "";
+
+            CrautomationContext objentity = new CrautomationContext();
+
+            foreach (string line in lines)
+            {
+                EntityExtractrion objextract = new EntityExtractrion();
+                if (line.Contains("Date:"))
+                {
+                    date = line.Substring(line.IndexOf(":") + 1).Trim();
+                    objextract.Entity = "Date";
+                    objextract.EntityDescription = date;
+                    entityext.Add(objextract);
+                }
+                else if (line.Contains("Medical History:"))
+                {
+                    medical_history = line.Substring(line.IndexOf(":") + 0).Trim();
+                    objextract.Entity = "Medical History";
+                    objextract.EntityDescription = medical_history;
+                    entityext.Add(objextract);
+                }
+                else if (line.Contains("Body Examination:"))
+                {
+                    body_examination = line.Substring(line.IndexOf(":") + 0).Trim();
+                    //body_examination = line + "\n";
+                    objextract.Entity = "Body Examination";
+                    objextract.EntityDescription = body_examination;
+                    entityext.Add(objextract);
+
+                }
+                else if (line.Contains("Tests done:"))
+                {
+                    tests_done = line.Substring(line.IndexOf(":") + 0).Trim();
+                    objextract.Entity = "Tests done";
+                    objextract.EntityDescription = tests_done;
+                    entityext.Add(objextract);
+
+                }
+                else if (line.Contains("Medicines Prescribed"))
+                {
+
+                    medicines_prescribed = line.Substring(line.IndexOf(":") + 0).Trim();
+                    objextract.Entity = "Medicines Prescribed";
+                    objextract.EntityDescription = medicines_prescribed;
+                    entityext.Add(objextract);
+                }
+            }
+            objentity.EntityExtractrions.AddRange(entityext);
+            objentity.SaveChanges();
+        }
+
+
+
+
+Index.cshtml
+-------------
+
+<div class="text-center">
+                                                                                <button type="button" onclick="convertDocToText()" class="btn btn-primary waves-effect waves-light">
+                                                                                    Process file
+                                                                                </button>
+
+                                                                            </div>
